@@ -1,0 +1,14 @@
+{% for paper in papers %}
+<div class="paper">
+    <div class="title"><a href="{{ paper.url }}">{{ paper.title }}</a></div>
+    <div class="authors">
+        {% for author in paper.authors %}
+        <span class="author">{{ author }}</span>
+        {% endfor %}
+    </div>
+    <div class="links">
+        <span class="link"><a href="{{ paper.url }}">ADS</a></span>
+        {% if paper.arxiv %}<span class="link"><a href="https://arxiv.org/abs/{{ paper.arxiv }}">ArXiv</a></span>{% endif %}
+    </div>
+</div>
+{% endfor %}
