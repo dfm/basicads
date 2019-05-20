@@ -99,6 +99,8 @@ def perform_query(query):
                        if paper.citation_count is not None else 0),
             url="https://ui.adsabs.harvard.edu/abs/{0}/abstract"
                 .format(paper.bibcode),
+            bibtex_url="https://ui.adsabs.harvard.edu/abs/{0}/exportcitation"
+                .format(paper.bibcode),
         ))
     return sorted(dicts, key=itemgetter("pubdate"), reverse=True)
 
