@@ -7,6 +7,8 @@ __all__ = []
 
 import re
 import shlex
+import calendar
+from datetime import datetime
 from operator import itemgetter
 from collections import namedtuple
 
@@ -19,6 +21,14 @@ from werkzeug.contrib.cache import SimpleCache
 app = flask.Flask(__name__)
 cache = SimpleCache()
 Tokens = namedtuple("Tokens", ("years", "authors"))
+
+
+class RateLimitError(Exception):
+    pass
+
+
+class InvalidQueryError(Exception):
+    pass
 
 
 def tokenize(query):
@@ -38,9 +48,16 @@ def tokenize(query):
 
 
 def perform_query(query):
+    ratelimit = cache.get("ratelimit")
+    if ratelimit is not None:
+        current = calendar.timegm(datetime.utcnow().timetuple())
+        delta = current - int(ratelimit.get("reset", 0))
+        if ratelimit.get("remaining", "1") == "0" and delta < 0:
+            raise RateLimitError()
+
     tokens = tokenize(query)
     if len(tokens.authors) == 0:
-        return
+        raise InvalidQueryError()
 
     # Construct the query
     q = []
@@ -54,11 +71,17 @@ def perform_query(query):
     q = " ".join(q)
 
     # Get the list of papers
-    papers = list(ads.SearchQuery(
+    result = ads.SearchQuery(
         q=q,
+        sort="pubdate+desc",
         fl=["id", "title", "author", "doi", "year", "pubdate", "pub",
             "volume", "page", "identifier", "doctype", "citation_count",
-            "bibcode"], max_pages=1))
+            "bibcode"], max_pages=1)
+    papers = list(result)
+
+    # Save the rate limit
+    ratelimit = result.response.get_ratelimits()
+    cache.set("ratelimit", ratelimit)
 
     # Get the list of bibtex entries
     # bibcodes = [p.bibcode for p in papers]
@@ -85,6 +108,7 @@ def perform_query(query):
             if paper.page is not None and paper.page[0].startswith("arXiv:"):
                 aid.append(":".join(paper.page[0].split(":")[1:]))
         dicts.append(dict(
+            bibcode=paper.bibcode,
             doctype=paper.doctype,
             authors=list(paper.author),
             year=paper.year,
@@ -102,7 +126,7 @@ def perform_query(query):
             bibtex_url="https://ui.adsabs.harvard.edu/abs/{0}/exportcitation"
                 .format(paper.bibcode),
         ))
-    return sorted(dicts, key=itemgetter("pubdate"), reverse=True)
+    return q, sorted(dicts, key=itemgetter("pubdate"), reverse=True)
 
 
 @app.route("/search/")
@@ -112,13 +136,15 @@ def search():
         return flask.redirect(flask.url_for("index"))
 
     # Get the list of papers from the cache if it exists
-    papers = cache.get(q)
-    if papers is None:
+    cache_result = cache.get(q)
+    if cache_result is None:
         # Otherwise hit ADS with the query
-        papers = perform_query(q)
-        cache.set(q, papers)
+        query, papers = perform_query(q)
+        cache.set(q, (query, papers))
+    else:
+        query, papers = cache_result
 
-    return flask.render_template("results.html", papers=papers)
+    return flask.render_template("results.html", query=query, papers=papers)
 
 
 @app.route("/")

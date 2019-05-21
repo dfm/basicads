@@ -1,15 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Basic ADS</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='normalize.css') }}    ">
+    <link rel="stylesheet" href="{{ url_for('static', filename='basic.css') }}    ">
+</head>
+<body>
+
+<div class="nasa-link">
+<a href="https://ui.adsabs.harvard.edu/search/q={{query}}">See these results on ADS</a>
+</div>
+
 {% for paper in papers %}
 <div class="paper">
-    <div class="title"><a href="{{ paper.url }}">{{ paper.title }}</a></div>
+    <div class="title">
+        <a href="{{ paper.url }}">{{ paper.title }}</a> ({{ paper.pubdate[:7] }})
+    </div>
     <div class="authors">
-        {% for author in paper.authors %}
+        {% set semicolon = joiner(";") %}
+        {% for author in paper.authors[:5] -%}{{ semicolon() }}
         <span class="author">{{ author }}</span>
-        {% endfor %}
+        {%- endfor -%}
+        {% if paper.authors|length == 6 %}{{ semicolon() }}
+        <span class="author">{{ paper.authors[5] }}</span>
+        {% elif paper.authors|length > 6 %}{{ semicolon() }}
+        {% set more = paper.authors|length - 5 %} and {{ more }} coauthors
+        {% endif %}
     </div>
     <div class="links">
+        <a href="{{ paper.url }}">{{ paper.bibcode }}</a>
         <span class="link"><a href="{{ paper.bibtex_url }}">BibTeX</a></span>
-        <span class="link"><a href="{{ paper.url }}">ADS</a></span>
         {% if paper.arxiv %}<span class="link"><a href="https://arxiv.org/abs/{{ paper.arxiv }}">ArXiv</a></span>{% endif %}
     </div>
 </div>
 {% endfor %}
+
+</body>
+</html>
